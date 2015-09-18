@@ -35,18 +35,20 @@ object ElsevierApp extends App with LazyLogging{
 
   val writer = CSVWriter.open(new File("./download/restrictedAccess.csv"))
 
-  for(i <- 0 to 21) {
+  val validPubTypes = List[String]("articles", "dditorial", "comment", "perspectives", "correspondence", "special report", "the lancet commissions", "clinical picture")
+
+  for(i <- 0 to 22) {
     val answer = Json.parse(get(s"${config.getString("search")}&APIKey=$key&start=${200*i}"))
     (answer \\ "entry").par.foreach(entry => {
-      val urls = (entry \\ "pii").map(_.toString().replaceAll("\"", ""))
-      //val pubTypes = (entry \\ "pubType").map(_.toString().replaceAll("\"", ""))
+      val PIIs = (entry \\ "pii").map(_.toString().replaceAll("\"", ""))
+      val pubTypes = (entry \\ "pubType").map(_.toString().replaceAll("\"", ""))
       val openAccess = (entry \\ "openaccessArticle").map(_.toString().replaceAll("\"", ""))
-      (urls zip openAccess).par.foreach(elem => {
-        if (elem._2.equalsIgnoreCase("true")) {
-          downloadAndStore(config.getString("getPdf") + elem._1 + s"?httpAccept=application/pdf&apiKey=$key", "./download/" + elem._1 + ".pdf")
-        } else if (elem._2.equalsIgnoreCase("false")) {
+      ((pubTypes zip PIIs) zip openAccess).par.foreach(elem => {
+        if (elem._2.equalsIgnoreCase("true") && validPubTypes.contains(elem._1._1.toLowerCase)) {
+          downloadAndStore(config.getString("getPdf") + elem._1._2 + s"?httpAccept=application/pdf&apiKey=$key", "./download/" + elem._1._2 + ".pdf")
+        } else if (elem._2.equalsIgnoreCase("false") && validPubTypes.contains(elem._1._1.toLowerCase)) {
           this.synchronized {
-            writer.writeRow(Seq[String](elem._1, elem._2))
+            writer.writeRow(Seq[String](elem._1._2, elem._1._1))
           }
         }
       })
